@@ -1,0 +1,248 @@
+---
+title: "Thesis- FIFA WORLD CUP RANKABILITY"
+author: "Arpan surabhi"
+date: "13/08/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig.width=4, fig.height=4)
+
+```
+Usage of Libraries;
+```{r, eval=T, echo=FALSE}
+suppressMessages(library(tidyverse))
+suppressMessages(library(ggplot2))
+suppressMessages(library(GGally))
+
+```
+
+Preprocessing and Cleaning the dataset.
+```{r}
+fifa_worldcup <- read.csv("/users/students/19250426/project/worldcup.csv")
+
+fifa_worldcup <- fifa_worldcup[,c(1,3,6,7,8,9)]
+
+fifa_worldcup <- na.omit(fifa_worldcup)
+
+fifa_worldcup <- filter(fifa_worldcup,Year=="1998"|Year=="2002"|Year=="2006"|Year=="2010"|Year=="2014")
+fifa_worldcup <- fifa_worldcup[-c(305:320),]
+head(fifa_worldcup)
+
+```
+
+We are considering the data after second world war hence we are dividing it for five different years from 1998-2014.
+```{r}
+fifa_worldcup1 <- fifa_worldcup[c(1:64),]
+fifa_worldcup2 <- fifa_worldcup[c(65:128),]
+fifa_worldcup3 <- fifa_worldcup[c(129:192),]
+fifa_worldcup4 <- fifa_worldcup[c(193:256),]
+fifa_worldcup5 <- fifa_worldcup[c(257:320),]
+```
+
+
+
+In this step we are going to find the rankability of particular year(2002) and  stage;
+```{r}
+fifa_worldcupA1 <- filter(fifa_worldcup2,Stage=="Group A")
+fifa_worldcupA1
+```
+
+ SPECR METHOD :Finding Adjusent matrix and replacing NA for the draw or tie matches;
+```{r}
+fifa_worldcupA1$Away.Team.Name<-as.character(fifa_worldcupA1$Away.Team.Name)
+fifa_worldcupA1$Home.Team.Name<-as.character(fifa_worldcupA1$Home.Team.Name)
+fifa_worldcupA1%>%mutate(Winner.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals>Away.Team.Goals,Home.Team.Name,Away.Team.Name)),Loser.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals<=Away.Team.Goals,Home.Team.Name,Away.Team.Name)))->fifa_worldcupA11
+na.omit(fifa_worldcupA11[,-c(1:6)])->p
+p
+```
+Eventually finding degree matrix,Eigen values and computing rankability using formulae;
+```{r}
+matrix(rep(0,16),nrow=4)->Al##Adjacent Matrix 
+colnames(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+row.names(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+r<-NULL
+il<-0
+final_result<-NULL
+for(year in unique(fifa_worldcup$Year)){
+fifa_worldcup3<-filter(fifa_worldcup,Year==year)
+for(xj in unique(fifa_worldcup3$Stage)[c(1:8)]){
+il<-il+1
+fifa_worldcupA <- filter(fifa_worldcup3,Stage%in%xj)
+fifa_worldcupA$Away.Team.Name<-as.character(fifa_worldcupA$Away.Team.Name)
+fifa_worldcupA$Home.Team.Name<-as.character(fifa_worldcupA$Home.Team.Name)
+fifa_worldcupA%>%mutate(Winner.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals>Away.Team.Goals,Home.Team.Name,Away.Team.Name)),Loser.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals<=Away.Team.Goals,Home.Team.Name,Away.Team.Name)))->fifa_worldcupA11
+na.omit(fifa_worldcupA11[,-c(1:6)])->p
+matrix(rep(0,16),nrow=4)->Al##Adjacent Matrix 
+colnames(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+row.names(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+
+#Degree Matrix
+
+d<-Al
+for(x in 1:nrow(p))
+{
+  Al[p[x,1],p[x,2]]=1
+  }
+rowSums(Al)->rs
+for(x in 1:length(rs)){d[names(rs[x]),names(rs[x])]=rs[x]}
+Lap <- d-Al
+Eig <- eigen(Lap)
+E<-Eig$values
+S<-diag(4)
+for(i in 1:4){
+  S[i,i]=nrow(S)-i
+}
+colnames(S)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+row.names(S)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+hv<-function(M1,M2){
+diff1<-NA
+diff2<-NA
+for(i in 1:nrow(M1)){
+  diff1[i]<-min(abs(M1[i]-M2))
+  diff2[i]<-min(abs(M2[i]-M1))
+}
+return(max(max(diff1),max(diff2)))
+}
+HDS <- hv(S,d)
+HDE <- hv(S,E)
+r[il]= 1-((HDS+HDE))/(2*(nrow(Lap)-1))
+final_result<-rbind(final_result,data.frame(Year=year,Group=xj,Rankability=r[il]))
+
+}
+
+}
+final_result
+
+```
+
+
+
+
+
+INTEGER PROGRAMMING METHOD :
+```{r}
+A <- Al
+n <- nrow(A)
+I <- diag(n)
+
+```
+
+Perms: Finding permutations ;
+```{r}
+library(combinat)
+T<-matrix(rep(0,16),nrow=4)
+for(x in 1:4)
+  for(y in 1:4)
+    if(x<y)
+      T[x,y]<-1
+v <- permn(n:1)
+unlist(v)%>%matrix(ncol=4,byrow = T)->v
+v
+d<-matrix(rep(0,factorial(n)),ncol = 1)
+
+for(temp in 1:factorial(4)){
+P<-matrix(rep(0,16),nrow=4)
+for(x in 1:4){
+  ij<-v[temp,x]
+  P[x,ij]<-1
+}
+DomA<-P%*%T%*%P
+d[temp]<-sum((DomA-A)!=0)
+}
+k<-min(d)
+p<-sum(d==k)
+r = 1 - (2*p*k/(n*(n-1)*factorial(n)))
+r
+
+```
+
+Finding adjacency matrix for IP method and computing IP formulae;
+```{r}
+library(combinat)
+r<-NULL
+il<-0
+IP<-NULL
+for(year in unique(fifa_worldcup$Year)){
+fifa_worldcup3<-filter(fifa_worldcup,Year==year)
+for(xj in unique(fifa_worldcup3$Stage)[c(1:8)]){
+il<-il+1
+fifa_worldcupA <- filter(fifa_worldcup3,Stage%in%xj)
+fifa_worldcupA$Away.Team.Name<-as.character(fifa_worldcupA$Away.Team.Name)
+fifa_worldcupA$Home.Team.Name<-as.character(fifa_worldcupA$Home.Team.Name)
+fifa_worldcupA%>%mutate(Winner.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals>Away.Team.Goals,Home.Team.Name,Away.Team.Name)),Loser.Name=ifelse(Home.Team.Goals==Away.Team.Goals,NA,ifelse(Home.Team.Goals<=Away.Team.Goals,Home.Team.Name,Away.Team.Name)))->fifa_worldcupA11
+na.omit(fifa_worldcupA11[,-c(1:6)])->p
+
+matrix(rep(0,16),nrow=4)->Al##Adjacent Matrix 
+colnames(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+row.names(Al)<-unique(c(fifa_worldcupA11$Home.Team.Name,fifa_worldcupA11$Away.Team.Name))
+
+
+#Adjacency Matrix
+for(x in 1:nrow(p)){Al[p[x,1],p[x,2]]=1}
+A<-Al
+n <- nrow(A)
+I <- diag(n)
+T<-matrix(rep(0,16),nrow=4)
+for(x in 1:4)
+  for(y in 1:4)
+    if(x<y)
+      T[x,y]<-1
+v <- permn(n:1)
+unlist(v)%>%matrix(ncol=4,byrow = T)->v
+v
+d<-matrix(rep(0,factorial(n)),ncol = 1)
+
+for(temp in 1:factorial(4)){
+P<-matrix(rep(0,16),nrow=4)
+for(x in 1:4){
+  ij<-v[temp,x]
+  P[x,ij]<-1
+}
+DomA<-P%*%T%*%P
+d[temp]<-sum((DomA-A)!=0)
+}
+k<-min(d)
+p<-sum(d==k)
+r[il] = 1 - (2*p*k/(n*(n-1)*factorial(n)))
+IP<-rbind(IP,data.frame(Year=year,Group=xj,IP_Rankability=r[il]))
+}
+}
+
+IP
+
+```
+
+
+```{r}
+##Finding the correlation for IP and SPECR methods:
+library(ggplot2)
+###correlation and ggplot
+cor(IP$IP_Rankability,final_result$Rankability)
+
+
+result<-left_join(final_result,IP)
+result
+
+##Finding correlation using pearson method
+cor(result$Rankability, result$IP_Rankability,  method = "pearson", use = "complete.obs")
+
+##plot the graph to know the relationship between these two methods ;
+ggplot(result)+geom_point(aes(x=IP_Rankability,y=Rankability))
+
+##plotting ggplot for only 2014 year 
+ggplot(result%>%filter(Year==2014))+geom_point(aes(x=IP_Rankability,y=Rankability))
+
+factor(result$Year)
+result$Year<-factor(result$Year)
+
+##GGplot for all five years ; 
+ggplot(result)+geom_point(aes(x=IP_Rankability,y=Rankability))+facet_wrap(~Year)
+
+ggpairs(result,
+        columns = c(x="IP_Rankability",y="Rankability"), 
+        upper = list(continuous = wrap("cor", 
+                                       size = 10)), 
+        lower = list(continuous = "smooth"))
+```
+
