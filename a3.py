@@ -1,0 +1,2 @@
+print "negative"
+print "end"
